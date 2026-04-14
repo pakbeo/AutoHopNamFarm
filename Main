@@ -1,35 +1,29 @@
 --========================================--
---          HỆ THỐNG NGÔN NGỮ (I18N)      --
+-- BẢO VỆ CÁC HÀM CỐT LÕI KHỎI OBFUSCATOR --
 --========================================--
-local Locales = {
-    VN = {
-        Starting = "Đang khởi động...",
-        Connecting = "Đang kết nối vào game...",
-        Loading = "Đang vượt màn hình Loading...",
-        PickingUp = "Đang bay đến nhặt: ",
-        Selling = "Đang kiểm tra và bán đồ rác...",
-        BuyingLucky = "Đủ tiền!\nĐang mua Lucky Arrow...",
-        WaitingMoney = "Chờ vật phẩm (Cày tiền mua Lucky Arrow)...",
-        Hopping = "Hết vật phẩm! Đang Server Hop...",
-        Waiting = "Đang ẩn nấp chờ vật phẩm mới..."
-    },
-    EN = {
-        Starting = "Starting up...",
-        Connecting = "Connecting to game...",
-        Loading = "Bypassing Loading Screen...",
-        PickingUp = "Flying to pick up: ",
-        Selling = "Checking and selling trash items...",
-        BuyingLucky = "Enough money!\nBuying Lucky Arrow...",
-        WaitingMoney = "Waiting for items (Grinding for Lucky Arrow)...",
-        Hopping = "No items left! Server Hopping...",
-        Waiting = "Hiding and waiting for new items..."
+local task_wait = task.wait
+local fireprox = fireproximityprompt or function() end
+local t_insert = table.insert
+local t_remove = table.remove
+local t_sort = table.sort
+
+--========================================--
+--               NHẬN CẤU HÌNH            --
+--========================================--
+-- Lấy Config từ file Loadstring của người dùng
+local Config = getgenv().Config or {
+    Webhook = { Enabled = false, Url = "" },
+    BuyLucky = true, AutoSell = true, Hop = false,
+    PriorityItems = {"Lucky Arrow", "Lucky Stone Mask"},
+    SellItems = {
+        ["Gold Coin"] = true, ["Rokakaka"] = true, ["Pure Rokakaka"] = true,
+        ["Mysterious Arrow"] = true, ["Diamond"] = true, ["Ancient Scroll"] = true,
+        ["Caesar's Headband"] = true, ["Stone Mask"] = true,
+        ["Rib Cage of The Saint's Corpse"] = true, ["Quinton's Glove"] = true,
+        ["Zeppeli's Hat"] = true, ["Lucky Arrow"] = false, ["Lucky Stone Mask"] = false,
+        ["Clackers"] = true, ["Steel Ball"] = true, ["Dio's Diary"] = true
     }
 }
-
-local function GetText(key)
-    local lang = (Config.Language == "EN") and "EN" or "VN"
-    return Locales[lang][key] or key
-end
 
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
@@ -50,10 +44,7 @@ local lastStatus = ""
 
 local function createStatusUI()
     pcall(function()
-        if CoreGui:FindFirstChild("NamFarmItemUI") then
-            CoreGui.NamFarmItemUI:Destroy()
-        end
-
+        if CoreGui:FindFirstChild("NamFarmItemUI") then CoreGui.NamFarmItemUI:Destroy() end
         local screenGui = Instance.new("ScreenGui")
         screenGui.Name = "NamFarmItemUI"
         screenGui.Parent = CoreGui
@@ -92,7 +83,7 @@ local function createStatusUI()
         statusLabel.TextColor3 = Color3.fromRGB(240, 240, 240)
         statusLabel.TextSize = 13
         statusLabel.Font = Enum.Font.GothamSemibold
-        statusLabel.Text = GetText("Starting")
+        statusLabel.Text = "Starting up..."
         statusLabel.TextWrapped = true
         statusLabel.Parent = mainFrame
 
@@ -112,7 +103,6 @@ end
 local function updateStatus(msg)
     local stats = Player:FindFirstChild("PlayerStats")
     local money = (stats and stats:FindFirstChild("Money")) and tostring(stats.Money.Value) or "0"
-
     local luckyCount = 0
     pcall(function()
         if Player.Backpack then
@@ -127,11 +117,9 @@ local function updateStatus(msg)
         end
     end)
 
-    -- Cập nhật màn hình game
     if statusLabel then statusLabel.Text = msg end
     if statsLabel then statsLabel.Text = "💵: $" .. money .. " | 🏹 Lucky: " .. tostring(luckyCount) end
 
-    -- Gửi Webhook
     if not Config.Webhook.Enabled or Config.Webhook.Url == "" then return end
     if msg == lastStatus then return end
     lastStatus = msg
@@ -142,8 +130,7 @@ local function updateStatus(msg)
             local content = {
                 ["content"] = "",
                 ["embeds"] = {{
-                    ["title"] = "Nam Farm Hub - Auto Item",
-                    ["color"] = tonumber(0xFFAA00), 
+                    ["title"] = "Nam Farm Hub - Auto Item", ["color"] = tonumber(0xFFAA00), 
                     ["fields"] = {
                         {["name"] = "👤 Player", ["value"] = "||" .. Player.Name .. "||", ["inline"] = true},
                         {["name"] = "💵 Money", ["value"] = "$" .. money, ["inline"] = true},
@@ -153,18 +140,13 @@ local function updateStatus(msg)
                     ["footer"] = {["text"] = "Nam Farm Hub | " .. os.date("%H:%M:%S")}
                 }}
             }
-            requestFunc({
-                Url = Config.Webhook.Url,
-                Method = "POST",
-                Headers = {["Content-Type"] = "application/json"},
-                Body = game:GetService("HttpService"):JSONEncode(content)
-            })
+            requestFunc({Url = Config.Webhook.Url, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = game:GetService("HttpService"):JSONEncode(content)})
         end)
     end
 end
 
 createStatusUI()
-updateStatus(GetText("Connecting"))
+updateStatus("Connecting to game...")
 
 --========================================--
 --               MÃ NGUỒN CHÍNH           --
@@ -173,7 +155,7 @@ updateStatus(GetText("Connecting"))
 game:GetService("CoreGui").DescendantAdded:Connect(function(child)
     if child.Name == "ErrorPrompt" then
         local GrabError = child:FindFirstChild("ErrorMessage", true)
-        repeat task.wait() until GrabError.Text ~= "Label"
+        repeat task_wait() until GrabError.Text ~= "Label"
         local Reason = GrabError.Text
         if Reason:match("kick") or Reason:match("You") or Reason:match("conn") or Reason:match("rejoin") then
             game:GetService("TeleportService"):Teleport(2809202155, Player)
@@ -186,9 +168,7 @@ local Has2x = MarketplaceService:UserOwnsGamePassAsync(Player.UserId, 14597778)
 local oldMagnitude
 oldMagnitude = hookmetamethod(Vector3.new(), "__index", newcclosure(function(self, index)
     local CallingScript = tostring(getcallingscript())
-    if not checkcaller() and index == "magnitude" and CallingScript == "ItemSpawn" then
-        return 0
-    end
+    if not checkcaller() and index == "magnitude" and CallingScript == "ItemSpawn" then return 0 end
     return oldMagnitude(self, index)
 end))
 
@@ -196,11 +176,8 @@ local ItemSpawnFolder = Workspace:WaitForChild("Item_Spawns"):WaitForChild("Item
 
 local function GetCharacter(Part)
     if Player.Character then
-        if not Part then
-            return Player.Character
-        elseif typeof(Part) == "string" then
-            return Player.Character:FindFirstChild(Part) or nil
-        end
+        if not Part then return Player.Character
+        elseif typeof(Part) == "string" then return Player.Character:FindFirstChild(Part) or nil end
     end
     return nil
 end
@@ -208,10 +185,7 @@ end
 local function TeleportTo(Position)
     local HumanoidRootPart = GetCharacter("HumanoidRootPart")
     if HumanoidRootPart then
-        local PositionType = typeof(Position)
-        if PositionType == "CFrame" then
-            HumanoidRootPart.CFrame = Position
-        end
+        if typeof(Position) == "CFrame" then HumanoidRootPart.CFrame = Position end
     end
 end
 
@@ -227,59 +201,35 @@ local function ToggleNoclip(Value)
 end
 
 local MaxItemAmounts = {
-    ["Gold Coin"] = 45,
-    ["Rokakaka"] = 25,
-    ["Pure Rokakaka"] = 10,
-    ["Mysterious Arrow"] = 25,
-    ["Diamond"] = 30,
-    ["Ancient Scroll"] = 10,
-    ["Caesar's Headband"] = 10,
-    ["Stone Mask"] = 10,
-    ["Rib Cage of The Saint's Corpse"] = 20,
-    ["Quinton's Glove"] = 10,
-    ["Zeppeli's Hat"] = 10,
-    ["Lucky Arrow"] = 15,
-    ["Lucky Stone Mask"] = 10,
-    ["Clackers"] = 10,
-    ["Steel Ball"] = 10,
-    ["Dio's Diary"] = 10
+    ["Gold Coin"] = 45, ["Rokakaka"] = 25, ["Pure Rokakaka"] = 10, ["Mysterious Arrow"] = 25, 
+    ["Diamond"] = 30, ["Ancient Scroll"] = 10, ["Caesar's Headband"] = 10, ["Stone Mask"] = 10, 
+    ["Rib Cage of The Saint's Corpse"] = 20, ["Quinton's Glove"] = 10, ["Zeppeli's Hat"] = 10, 
+    ["Lucky Arrow"] = 15, ["Lucky Stone Mask"] = 10, ["Clackers"] = 10, ["Steel Ball"] = 10, ["Dio's Diary"] = 10
 }
 
 if Has2x then
-    for Index, Max in pairs(MaxItemAmounts) do
-         MaxItemAmounts[Index] = Max * 2
-    end
+    for Index, Max in pairs(MaxItemAmounts) do MaxItemAmounts[Index] = Max * 2 end
 end
 
 local function HasMaxItem(Item)
     local Count = 0
     for _, Tool in pairs(Player.Backpack:GetChildren()) do
-        if Tool.Name == Item then
-            Count += 1
-        end
+        if Tool.Name == Item then Count += 1 end
     end
-    if MaxItemAmounts[Item] then
-        return Count >= MaxItemAmounts[Item]
-    else
-        return false
-   end
+    if MaxItemAmounts[Item] then return Count >= MaxItemAmounts[Item] else return false end
 end
 
 local function HasLuckyArrows()
     local Count = 0
     for _, Tool in pairs(Player.Backpack:GetChildren()) do
-        if Tool.Name == "Lucky Arrow" then
-            Count += 1
-        end
+        if Tool.Name == "Lucky Arrow" then Count += 1 end
     end
     return Count >= 9
 end
 
 local function IsPriorityItem(ItemName)
     for _, PriorityName in pairs(Config.PriorityItems) do
-        if ItemName == PriorityName then
-             return true
-        end
+        if ItemName == PriorityName then return true end
     end
     return false
 end
@@ -293,17 +243,10 @@ local function GetItemInfo(Model)
         local Position = PrimaryPart.Position
         local ProximityPrompt
         for _, ItemInstance in pairs(Model:GetChildren()) do
-             if ItemInstance:IsA("ProximityPrompt") and ItemInstance.MaxActivationDistance == 8 then
-                ProximityPrompt = ItemInstance
-            end
+             if ItemInstance:IsA("ProximityPrompt") and ItemInstance.MaxActivationDistance == 8 then ProximityPrompt = ItemInstance end
         end
         if ProximityPrompt then
-            return {
-                ["Name"] = ProximityPrompt.ObjectText,
-                ["ProximityPrompt"] = ProximityPrompt,
-                ["Position"] = Position,
-                ["IsPriority"] = IsPriorityItem(ProximityPrompt.ObjectText)
-            }
+            return { ["Name"] = ProximityPrompt.ObjectText, ["ProximityPrompt"] = ProximityPrompt, ["Position"] = Position, ["IsPriority"] = IsPriorityItem(ProximityPrompt.ObjectText) }
         end
     end
     return nil
@@ -312,12 +255,10 @@ end
 getgenv().SpawnedItems = {}
 
 ItemSpawnFolder.ChildAdded:Connect(function(Model)
-    task.wait(1)
+    task_wait(1)
     if Model:IsA("Model") then
         local ItemInfo = GetItemInfo(Model)
-        if ItemInfo then
-            table.insert(getgenv().SpawnedItems, ItemInfo)
-        end
+        if ItemInfo then t_insert(getgenv().SpawnedItems, ItemInfo) end
     end
 end)
 
@@ -333,9 +274,9 @@ oldNc = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
     return oldNc(self, ...)
 end))
 
-task.wait(1)
+task_wait(1)
 
-updateStatus(GetText("Loading"))
+updateStatus("Loading...")
 
 if not PlayerGui:FindFirstChild("HUD") then
     local HUD = ReplicatedStorage.Objects.HUD:Clone()
@@ -343,35 +284,25 @@ if not PlayerGui:FindFirstChild("HUD") then
 end
 
 task.spawn(function()
-    pcall(function()
-        PlayerGui:WaitForChild("LoadingScreen1"):Destroy()
-    end)
-    task.wait(.5)
-    pcall(function()
-        PlayerGui:WaitForChild("LoadingScreen"):Destroy()
-    end)
-    pcall(function()
-        workspace.LoadingScreen.Song:Destroy()
-    end)
+    pcall(function() PlayerGui:WaitForChild("LoadingScreen1"):Destroy() end)
+    task_wait(.5)
+    pcall(function() PlayerGui:WaitForChild("LoadingScreen"):Destroy() end)
+    pcall(function() workspace.LoadingScreen.Song:Destroy() end)
 end)
 
-repeat task.wait() until GetCharacter() and GetCharacter("RemoteEvent")
+repeat task_wait() until GetCharacter() and GetCharacter("RemoteEvent")
 
 GetCharacter("RemoteEvent"):FireServer("PressedPlay")
 
 TeleportTo(CFrame.new(978, -42, -49))
 
-task.wait(5)
+task_wait(5)
 
 local function SortItems()
-    table.sort(getgenv().SpawnedItems, function(a, b)
-        if a.IsPriority and not b.IsPriority then
-             return true
-        elseif not a.IsPriority and b.IsPriority then
-            return false
-        else
-            return false
-        end
+    t_sort(getgenv().SpawnedItems, function(a, b)
+        if a.IsPriority and not b.IsPriority then return true
+        elseif not a.IsPriority and b.IsPriority then return false
+        else return false end
     end)
 end
 
@@ -388,12 +319,13 @@ while true do
                 local HasMax = HasMaxItem(Name)
                 
                 if not HasMax then
-                    updateStatus(GetText("PickingUp") .. Name)
+                    updateStatus("Flying to pick up: " .. Name)
+                    
                     local ProximityPrompt = ItemInfo.ProximityPrompt
                     local Position = ItemInfo.Position
                     
                     if ProximityPrompt and ProximityPrompt.Parent then
-                        table.remove(getgenv().SpawnedItems, Index)
+                        t_remove(getgenv().SpawnedItems, Index)
                         
                         local BodyVelocity = Instance.new("BodyVelocity")
                         BodyVelocity.Parent = HumanoidRootPart
@@ -402,21 +334,21 @@ while true do
                         
                         ToggleNoclip(true)
                         TeleportTo(CFrame.new(Position.X, Position.Y + 25, Position.Z))
-                        task.wait(.5)
+                        task_wait(.5)
                         
                         pcall(function()
-                            fireproximityprompt(ProximityPrompt)
+                            if fireprox then fireprox(ProximityPrompt) end
                         end)
                         
-                        task.wait(.5)
+                        task_wait(.5)
                         BodyVelocity:Destroy()
                         ToggleNoclip(false)
                         TeleportTo(CFrame.new(978, -42, -49))
                     else
-                        table.remove(getgenv().SpawnedItems, Index)
+                        t_remove(getgenv().SpawnedItems, Index)
                     end
                 else
-                    table.remove(getgenv().SpawnedItems, Index)
+                    t_remove(getgenv().SpawnedItems, Index)
                 end
             end
         end
@@ -424,19 +356,19 @@ while true do
     
     if #getgenv().SpawnedItems == 0 then
         if Config.AutoSell then
-             updateStatus(GetText("Selling"))
+             updateStatus("Checking and selling trash items...")
             for Item, Sell in pairs(Config.SellItems) do
                 if Sell and Player.Backpack and Player.Backpack:FindFirstChild(Item) then
                     local Character = GetCharacter()
                     if Character and Character:FindFirstChild("Humanoid") and Character:FindFirstChild("RemoteEvent") then
                         Character.Humanoid:EquipTool(Player.Backpack:FindFirstChild(Item))
-                        task.wait(.1)
+                        task_wait(.1)
                         Character.RemoteEvent:FireServer("EndDialogue", {
                             ["NPC"] = "Merchant",
                             ["Dialogue"] = "Dialogue5",
                             ["Option"] = "Option2"
                         })
-                        task.wait(.2)
+                        task_wait(.2)
                     end
                 end
             end
@@ -445,12 +377,12 @@ while true do
         local Money = Player.PlayerStats.Money
         
         if Config.BuyLucky and not HasLuckyArrows() then
-            if Money.Value >= 75000 then updateStatus(GetText("BuyingLucky")) end
+            if Money.Value >= 75000 then updateStatus("Enough money! Buying Lucky Arrow...") end
             while Money.Value >= 75000 do
                 local Character = GetCharacter()
                 if Character and Character:FindFirstChild("RemoteEvent") then
                     Character.RemoteEvent:FireServer("PurchaseShopItem", {["ItemName"] = "1x Lucky Arrow"})
-                    task.wait(.1)
+                    task_wait(.1)
                 else
                     break
                 end
@@ -461,23 +393,21 @@ while true do
             local ShouldHop = true
             if Config.BuyLucky and not HasLuckyArrows() and Money.Value >= 50000 then
                 ShouldHop = false
-                updateStatus(GetText("WaitingMoney"))
+                updateStatus("Waiting for items (Grinding money)...")
             end
             
             if ShouldHop then
-                updateStatus(GetText("Hopping"))
-                pcall(function()
-                    Teleport()
-                end)
-                task.wait(3)
+                updateStatus("No items left! Server Hopping...")
+                pcall(function() Teleport() end)
+                task_wait(3)
             else
-                task.wait(5)
+                task_wait(5)
             end
         else
-            updateStatus(GetText("Waiting"))
-            task.wait(5)
+            updateStatus("Hiding and waiting for new items...")
+            task_wait(5)
         end
     else
-        task.wait(1)
+        task_wait(1)
     end
 end
